@@ -1,0 +1,32 @@
+run:
+  tests: false
+  fix: true
+  skip-dirs:
+    - vendor
+    - misc
+    - results
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - unused
+    - whitespace
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - gosec
+    - prealloc
+    - gofmt
+    - goimports
+    - funlen
+    - containedctx
+    - contextcheck
+    - decorder
+    - dupword
+    - durationcheck
+    - errname
+    - errchkjson
+    - errorlint
+    - gocritic
