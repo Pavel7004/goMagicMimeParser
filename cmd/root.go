@@ -3,6 +3,7 @@ Copyright © 2023 Kovalev Pavel kovalev5690@gmail.com
 */package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -37,4 +38,32 @@ func listAll(cmd *cobra.Command, args []string) {
 
 	cobra.CheckErr(r.Open())
 	defer cobra.CheckErr(r.Close())
+
+	sec := r.ReadSection()
+	for !r.EOF() {
+		fmt.Printf("Filetype: %s\n", sec.Filetype)
+		fmt.Printf("Priority: %d\n", sec.Priority)
+		for i, con := range sec.Contents {
+			if i > 1 {
+				fmt.Printf(" ~~~~~~~ \n")
+			}
+			fmt.Printf("Value: ")
+			for _, c := range con.Value {
+				fmt.Printf("%02x ", c)
+			}
+			fmt.Printf("\n")
+
+			fmt.Printf("Mask:  ")
+			for _, c := range con.Mask {
+				fmt.Printf("%02x ", c)
+			}
+			fmt.Printf("\n")
+
+			fmt.Printf("Indent: %d\n", con.Indent)
+			fmt.Printf("Offset: %d\n", con.Offset)
+		}
+		fmt.Printf(" ------- \n")
+
+		sec = r.ReadSection()
+	}
 }
