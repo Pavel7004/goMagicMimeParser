@@ -1,6 +1,7 @@
 .PHONY: all
 all: lint
 
+.PHONY: lint
 lint:
 	@echo "---------------------"
 	@echo "Sort imports"
@@ -11,3 +12,7 @@ lint:
 	@echo "Running linters"
 	@echo "---------------------"
 	golangci-lint run ./...
+
+
+build:
+	go build -o magic main.go
