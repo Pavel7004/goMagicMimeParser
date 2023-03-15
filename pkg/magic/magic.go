@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"strconv"
+
+	"github.com/Pavel7004/goMimeMagic/pkg/domain"
 )
 
 var (
@@ -21,21 +23,6 @@ type MagicReader struct {
 
 	reader *bufio.Reader
 	file   *os.File
-}
-
-type Section struct {
-	Filetype string
-	Priority uint
-	Contents []*Content
-}
-
-type Content struct {
-	Indent      uint
-	Offset      uint
-	Value       []byte
-	Mask        []byte
-	RangeLength uint
-	WordSize    uint
 }
 
 func NewMagicReader() *MagicReader {
@@ -65,17 +52,17 @@ func (r *MagicReader) EOF() bool {
 	return r.isEOF
 }
 
-func (r *MagicReader) ReadSection() *Section {
-	sec := new(Section)
+func (r *MagicReader) ReadSection() *domain.Section {
+	sec := new(domain.Section)
 
 	r.findSectionStart()
 	if !r.isEOF {
 		sec.Priority = r.getUintToken(':')
 		sec.Filetype = r.getStringToken(']')
 		r.skipAfterNewline()
-		sec.Contents = make([]*Content, 0, 2)
+		sec.Contents = make([]*domain.Content, 0, 2)
 
-		con := new(Content)
+		con := new(domain.Content)
 		for r.checkSegmentEnd() {
 			con.Indent = r.getUintToken('>')
 			con.Offset = r.getUintToken('=')
