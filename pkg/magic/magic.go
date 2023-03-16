@@ -18,6 +18,7 @@ var (
 	ErrFileIsNotMIMEMagic = errors.New("File is not MIME Magic file")
 	ErrHeaderCorrupted    = errors.New("Section header is not readable")
 	ErrContentCorrupted   = errors.New("Section content is not readable")
+	ErrTokenNotFound      = errors.New("Token not found")
 )
 
 type MagicReader struct {
@@ -64,123 +65,24 @@ func (r *MagicReader) ReadSections() ([]*domain.Section, error) {
 
 		log.Printf("Read buffer %q", string(buff))
 		if buff[0] == '[' {
-			if sec, err := r.ReadHeader(buff); err != nil {
+			sec, err := r.readHeader(buff)
+			if err != nil {
 				return nil, err
-			} else {
-				secs = append(secs, sec)
 			}
+
+			secs = append(secs, sec)
 		} else {
 			if len(secs) == 0 {
 				log.Printf("Found content string, expected header.")
 				return nil, ErrHeaderCorrupted
 			}
 
-			cont := new(domain.Content)
-
-			// INFO: format - [indent] > [offset] = [2 byte value size][value]
-
-			indentBytes, buff, ok := bytes.Cut(buff, []byte{'>'})
-			if !ok {
-				log.Printf("Failed to read section content indent string. buff = %q", string(indentBytes))
-				return nil, ErrContentCorrupted
-			}
-			if len(indentBytes) > 0 {
-				indent, err := strconv.ParseUint(string(indentBytes), 10, 32)
-				if err != nil {
-					log.Printf("Failed to parse section content indent string. err = %v", err)
-					return nil, ErrContentCorrupted
-				}
-				cont.Indent = uint(indent)
-			}
-
-			offsetBytes, buff, ok := bytes.Cut(buff, []byte{'='})
-			if !ok {
-				log.Printf("Failed to read section content offset string. buff = %q", string(offsetBytes))
-				return nil, ErrContentCorrupted
-			}
-			offset, err := strconv.ParseUint(string(offsetBytes), 10, 32)
+			con, err := r.readContent(buff)
 			if err != nil {
-				log.Printf("Failed to parse section content offset string. err = %v", err)
-				return nil, ErrContentCorrupted
-			}
-			cont.Offset = uint(offset)
-
-			if len(buff) <= 3 {
-				tmpBuff, err := r.reader.ReadBytes('\n')
-				if err != nil {
-					log.Printf("Failed to append next line to buff. err = %v", err)
-					return nil, ErrContentCorrupted
-				}
-
-				log.Printf("Read first additional buff = %q", string(tmpBuff))
-				buff = append(buff, tmpBuff...)
-			}
-			size := int(binary.BigEndian.Uint16(buff[:2]))
-			buff = buff[2:]
-			if len(buff) <= size {
-				tmpBuff, err := r.reader.ReadBytes('\n')
-				if err != nil {
-					log.Printf("Failed to append next line to buff. err = %v", err)
-					return nil, ErrContentCorrupted
-				}
-
-				log.Printf("Read second additional buff = %q", string(tmpBuff))
-				buff = append(buff, tmpBuff...)
-
-				c, err := r.reader.Peek(1)
-				if err != nil {
-					log.Printf("Failed to peek the next byte after reading additional buffer. err = %v", err)
-					return nil, ErrContentCorrupted
-				}
-				if c[0] == '\n' {
-					buff = append(buff, '\n')
-					_, err := r.reader.Discard(1)
-					if err != nil {
-						log.Printf("Failed to discard byte after peek. err = %v", err)
-						return nil, ErrContentCorrupted
-					}
-				}
+				return nil, err
 			}
 
-			cont.RangeLength = 1
-			buff, rangeBytes, ok := bytes.Cut(buff[:len(buff)-1], []byte{'+'})
-			if ok {
-				if !unicode.IsDigit(rune(rangeBytes[0])) {
-					buff = append(buff, rangeBytes...)
-				} else {
-					rangeLen, err := strconv.ParseUint(string(rangeBytes), 10, 32)
-					if err != nil {
-						log.Printf("Failed to parse section content range-length string. err = %v", err)
-						return nil, ErrContentCorrupted
-					}
-					cont.RangeLength = uint(rangeLen)
-				}
-			}
-
-			cont.WordSize = 1
-			buff, wordSizeBytes, ok := bytes.Cut(buff, []byte{'~'})
-			if ok {
-				if !unicode.IsDigit(rune(wordSizeBytes[0])) {
-					buff = append(buff, wordSizeBytes...)
-				} else {
-					wordSize, err := strconv.ParseUint(string(wordSizeBytes), 10, 32)
-					if err != nil {
-						log.Printf("Failed to parse section content word-size string. err = %v", err)
-						return nil, ErrContentCorrupted
-					}
-					cont.WordSize = uint(wordSize)
-				}
-			}
-
-			cont.Value, cont.Mask, ok = bytes.Cut(buff, []byte{'&'})
-			if !ok {
-				cont.Mask = make([]byte, size)
-				for i := range cont.Mask {
-					cont.Mask[i] = 0xff
-				}
-			}
-
-			secs[len(secs)-1].Contents = append(secs[len(secs)-1].Contents, cont)
+			secs[len(secs)-1].Contents = append(secs[len(secs)-1].Contents, con)
 		}
 	}
 
@@ -188,7 +90,7 @@ func (r *MagicReader) ReadSections() ([]*domain.Section, error) {
 }
 
 func (r *MagicReader) checkMagicHeader() error {
-	sign := []byte("MIME-Magic\000\n")
+	sign := []byte("MIME-Magic\x00\n")
 
 	fileSign := make([]byte, len(sign))
 
@@ -205,8 +107,7 @@ func (r *MagicReader) checkMagicHeader() error {
 	return nil
 }
 
-func (r *MagicReader) ReadHeader(buff []byte) (*domain.Section, error) {
-	// INFO: format - [priority : filetype]\n
+func (r *MagicReader) readHeader(buff []byte) (*domain.Section, error) {
 	priority, filetype, ok := bytes.Cut(buff[1:len(buff)-2], []byte{':'})
 	if !ok {
 		log.Printf("Failed to read section header. buff = %q", string(buff))
@@ -224,4 +125,99 @@ func (r *MagicReader) ReadHeader(buff []byte) (*domain.Section, error) {
 		Priority: uint(num),
 		Contents: make([]*domain.Content, 0, 2),
 	}, nil
+}
+
+func (r *MagicReader) readContent(buff []byte) (*domain.Content, error) {
+	indent, buff, err := r.getUintToken(buff, '>')
+	if err != nil && !errors.Is(err, ErrTokenNotFound) {
+		return nil, err
+	}
+
+	offset, buff, err := r.getUintToken(buff, '=')
+	if err != nil {
+		return nil, err
+	}
+
+	size := 0
+	if len(buff) >= 2 {
+		size = int(binary.BigEndian.Uint16(buff[:2]))
+		buff = buff[2:]
+	}
+	log.Printf("Size of value in content: %d, size of buff: %d", size, len(buff))
+
+	for len(buff) <= size {
+		tmpBuff, err := r.reader.ReadBytes('\n')
+		if err != nil {
+			log.Printf("Failed to append next line to buff. err = %v", err)
+			return nil, ErrContentCorrupted
+		}
+
+		log.Printf("Read additional buff = %q", string(tmpBuff))
+		buff = append(buff, tmpBuff...)
+	}
+
+	rangeLength, buff, err := r.getOptUintToken(buff[:len(buff)-1], '+')
+	if err != nil {
+		return nil, err
+	}
+
+	wordSize, buff, err := r.getOptUintToken(buff, '~')
+	if err != nil {
+		return nil, err
+	}
+
+	value, mask, ok := bytes.Cut(buff, []byte{'&'})
+	if !ok {
+		mask = make([]byte, size)
+		for i := range mask {
+			mask[i] = 0xff
+		}
+	}
+
+	return &domain.Content{
+		Indent:      indent,
+		Offset:      offset,
+		Value:       value,
+		Mask:        mask,
+		RangeLength: rangeLength,
+		WordSize:    wordSize,
+	}, nil
+}
+
+func (r *MagicReader) getUintToken(buff []byte, del byte) (uint, []byte, error) {
+	tokenBytes, buff, ok := bytes.Cut(buff, []byte{del})
+	if !ok {
+		log.Printf("Failed to read section content  string. buff = %q", string(tokenBytes))
+		return 0, nil, ErrContentCorrupted
+	}
+	if len(tokenBytes) == 0 {
+		return 0, buff, ErrTokenNotFound
+	}
+	token, err := strconv.ParseUint(string(tokenBytes), 10, 32)
+	if err != nil {
+		log.Printf("Failed to parse section content indent string. err = %v", err)
+		return 0, nil, ErrContentCorrupted
+	}
+	return uint(token), buff, nil
+}
+
+func (r *MagicReader) getOptUintToken(buff []byte, del byte) (uint, []byte, error) {
+	var optVal uint = 1
+
+	buff, optBytes, ok := bytes.Cut(buff, []byte{del})
+	if ok {
+		if !unicode.IsDigit(rune(optBytes[0])) {
+			buff = append(buff, del)
+			buff = append(buff, optBytes...)
+		} else {
+			rangeLen, err := strconv.ParseUint(string(optBytes), 10, 32)
+			if err != nil {
+				log.Printf("Failed to parse section optional content string. del = %c, err = %v", del, err)
+				return 0, nil, ErrContentCorrupted
+			}
+			optVal = uint(rangeLen)
+		}
+	}
+
+	return optVal, buff, nil
 }
