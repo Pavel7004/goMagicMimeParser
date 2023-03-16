@@ -1,14 +1,38 @@
 /*
 Copyright © 2023 Kovalev Pavel kovalev5690@gmail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 */package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 
 	"github.com/Pavel7004/goMimeMagic/pkg/magic"
+)
+
+var (
+	debug bool
 )
 
 var rootCmd = &cobra.Command{
@@ -30,10 +54,17 @@ func Execute() {
 }
 
 func init() {
-	// rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().BoolVarP(&debug, "debug", "d", true, "Turn on debug info")
 }
 
 func listAll(cmd *cobra.Command, args []string) {
+	if !debug {
+		log.SetFlags(0)
+		log.SetOutput(ioutil.Discard)
+	} else {
+		log.SetFlags(log.Lshortfile)
+	}
+
 	r := magic.NewMagicReader()
 
 	cobra.CheckErr(r.Open())
@@ -45,8 +76,8 @@ func listAll(cmd *cobra.Command, args []string) {
 	for _, sec := range secs {
 		fmt.Printf("Filetype: %s\n", sec.Filetype)
 		fmt.Printf("Priority: %d\n", sec.Priority)
-		for i, con := range sec.Contents {
-			if i > 1 {
+		for _, con := range sec.Contents {
+			if len(sec.Contents) > 1 {
 				fmt.Printf(" ~~~~~~~ \n")
 			}
 			fmt.Printf("Value: ")
