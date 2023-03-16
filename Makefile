@@ -1,5 +1,5 @@
 .PHONY: all
-all: lint
+all: build
 
 .PHONY: lint
 lint:
