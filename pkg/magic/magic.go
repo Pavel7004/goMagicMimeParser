@@ -22,22 +22,20 @@ var (
 )
 
 type MagicReader struct {
-	filename string
+	Filename string
 
 	reader *bufio.Reader
 	file   *os.File
 }
 
 func NewMagicReader() *MagicReader {
-	r := new(MagicReader)
-
-	r.filename = "/usr/share/mime/magic"
-
-	return r
+	return &MagicReader{
+		Filename: "/usr/share/mime/magic",
+	}
 }
 
 func (r *MagicReader) Open() error {
-	f, err := os.Open(r.filename)
+	f, err := os.Open(r.Filename)
 	if err != nil {
 		return err
 	}
