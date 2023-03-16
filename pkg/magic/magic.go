@@ -50,11 +50,8 @@ func (r *MagicReader) Close() error {
 }
 
 func (r *MagicReader) ReadSections() ([]*domain.Section, error) {
-	var (
-		sec *domain.Section
+	secs := make([]*domain.Section, 0, 10)
 
-		secs = make([]*domain.Section, 0, 10)
-	)
 	for {
 		buff, err := r.reader.ReadBytes('\n')
 		if err != nil {
@@ -67,41 +64,24 @@ func (r *MagicReader) ReadSections() ([]*domain.Section, error) {
 
 		log.Printf("Read buffer %q", string(buff))
 		if buff[0] == '[' {
-			// INFO: format - [priority : filetype]\n
-			priority, filetype, ok := bytes.Cut(buff[1:len(buff)-2], []byte{':'})
-			if !ok {
-				log.Printf("Failed to read section header. buff = %q", string(buff))
-				return nil, ErrHeaderCorrupted
-			}
-
-			num, err := strconv.ParseUint(string(priority), 10, 32)
-			if err != nil {
-				log.Printf("Failed to parse section priority in header. err = %v", err)
-				return nil, ErrHeaderCorrupted
-			}
-
-			if sec != nil {
+			if sec, err := r.ReadHeader(buff); err != nil {
+				return nil, err
+			} else {
 				secs = append(secs, sec)
 			}
-
-			sec = &domain.Section{
-				Filetype: string(filetype),
-				Priority: uint(num),
-				Contents: make([]*domain.Content, 0, 2),
-			}
 		} else {
-			// INFO: format - [indent] > [offset] = [2 byte value size][value]
-			if sec == nil {
+			if len(secs) == 0 {
 				log.Printf("Found content string, expected header.")
 				return nil, ErrHeaderCorrupted
 			}
 
 			cont := new(domain.Content)
 
+			// INFO: format - [indent] > [offset] = [2 byte value size][value]
+
 			indentBytes, buff, ok := bytes.Cut(buff, []byte{'>'})
 			if !ok {
 				log.Printf("Failed to read section content indent string. buff = %q", string(indentBytes))
-				log.Printf("Section info: %q : %d ; %v", sec.Filetype, sec.Priority, sec.Contents)
 				return nil, ErrContentCorrupted
 			}
 			if len(indentBytes) > 0 {
@@ -200,7 +180,7 @@ func (r *MagicReader) ReadSections() ([]*domain.Section, error) {
 				}
 			}
 
-			sec.Contents = append(sec.Contents, cont)
+			secs[len(secs)-1].Contents = append(secs[len(secs)-1].Contents, cont)
 		}
 	}
 
@@ -223,4 +203,25 @@ func (r *MagicReader) checkMagicHeader() error {
 	}
 
 	return nil
+}
+
+func (r *MagicReader) ReadHeader(buff []byte) (*domain.Section, error) {
+	// INFO: format - [priority : filetype]\n
+	priority, filetype, ok := bytes.Cut(buff[1:len(buff)-2], []byte{':'})
+	if !ok {
+		log.Printf("Failed to read section header. buff = %q", string(buff))
+		return nil, ErrHeaderCorrupted
+	}
+
+	num, err := strconv.ParseUint(string(priority), 10, 32)
+	if err != nil {
+		log.Printf("Failed to parse section priority in header. err = %v", err)
+		return nil, ErrHeaderCorrupted
+	}
+
+	return &domain.Section{
+		Filetype: string(filetype),
+		Priority: uint(num),
+		Contents: make([]*domain.Content, 0, 2),
+	}, nil
 }
