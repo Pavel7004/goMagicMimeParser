@@ -22,7 +22,6 @@ var (
 
 type MagicReader struct {
 	filename string
-	isEOF    bool
 
 	reader *bufio.Reader
 	file   *os.File
@@ -32,7 +31,6 @@ func NewMagicReader() *MagicReader {
 	r := new(MagicReader)
 
 	r.filename = "/usr/share/mime/magic"
-	r.isEOF = false
 
 	return r
 }
