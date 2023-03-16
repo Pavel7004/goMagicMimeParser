@@ -39,8 +39,10 @@ func listAll(cmd *cobra.Command, args []string) {
 	cobra.CheckErr(r.Open())
 	defer cobra.CheckErr(r.Close())
 
-	sec := r.ReadSection()
-	for !r.EOF() {
+	secs, err := r.ReadSections()
+	cobra.CheckErr(err)
+
+	for _, sec := range secs {
 		fmt.Printf("Filetype: %s\n", sec.Filetype)
 		fmt.Printf("Priority: %d\n", sec.Priority)
 		for i, con := range sec.Contents {
@@ -63,7 +65,5 @@ func listAll(cmd *cobra.Command, args []string) {
 			fmt.Printf("Offset: %d\n", con.Offset)
 		}
 		fmt.Printf(" ------- \n")
-
-		sec = r.ReadSection()
 	}
 }
