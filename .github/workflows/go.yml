@@ -32,7 +32,7 @@ jobs:
         run: make build
       
       - name: Run tests
-        run: go tests -v ./...
+        run: go test -v ./...
       
       - name: Run program
         run: ./magic -d
