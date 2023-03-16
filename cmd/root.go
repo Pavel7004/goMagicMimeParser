@@ -22,7 +22,7 @@ SOFTWARE.
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"os"
 
@@ -60,7 +60,7 @@ func init() {
 func listAll(cmd *cobra.Command, args []string) {
 	if !debug {
 		log.SetFlags(0)
-		log.SetOutput(ioutil.Discard)
+		log.SetOutput(io.Discard)
 	} else {
 		log.SetFlags(log.Lshortfile)
 	}
