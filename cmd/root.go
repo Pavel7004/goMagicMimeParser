@@ -25,6 +25,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -32,7 +33,9 @@ import (
 )
 
 var (
-	debug bool
+	debug           bool
+	showMask        bool
+	showStringValue bool
 )
 
 var rootCmd = &cobra.Command{
@@ -54,7 +57,9 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().BoolVarP(&debug, "debug", "d", true, "Turn on debug info")
+	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Turn on debug info")
+	rootCmd.Flags().BoolVarP(&showMask, "with-mask", "m", false, "Print mask")
+	rootCmd.Flags().BoolVarP(&showStringValue, "value-as-string", "s", false, "Print value as sequence of characters")
 }
 
 func listAll(cmd *cobra.Command, args []string) {
@@ -80,17 +85,26 @@ func listAll(cmd *cobra.Command, args []string) {
 			if len(sec.Contents) > 1 {
 				fmt.Printf(" ~~~~~~~ \n")
 			}
-			fmt.Printf("Value: ")
-			for _, c := range con.Value {
-				fmt.Printf("%02x ", c)
-			}
-			fmt.Printf("\n")
 
-			fmt.Printf("Mask:  ")
-			for _, c := range con.Mask {
-				fmt.Printf("%02x ", c)
+			if showStringValue {
+				fmt.Printf("Value: %q\n", strings.TrimFunc(string(con.Value), func(r rune) bool {
+					return r == '\n'
+				}))
+			} else {
+				fmt.Printf("Value: ")
+				for _, c := range con.Value {
+					fmt.Printf("%02x ", c)
+				}
+				fmt.Printf("\n")
 			}
-			fmt.Printf("\n")
+
+			if showMask {
+				fmt.Printf("Mask:  ")
+				for _, c := range con.Mask {
+					fmt.Printf("%02x ", c)
+				}
+				fmt.Printf("\n")
+			}
 
 			fmt.Printf("Indent: %d\n", con.Indent)
 			fmt.Printf("Offset: %d\n", con.Offset)
